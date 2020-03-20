@@ -1,0 +1,5 @@
+{:deps  {seancorfield/next.jdbc    {:mvn/version "1.0.409"}
+         com.wsscode/pathom        {:mvn/version "2.3.0-alpha5"}
+         honeysql                  {:mvn/version "0.9.10"}
+         org.postgresql/postgresql {:mvn/version "42.2.11.jre7"}}
+ :paths ["src"]}

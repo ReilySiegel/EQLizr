@@ -1,0 +1,125 @@
+#+TITLE: EQLizr
+#+SUBTITLE: EQLizr keeps all your data on an equal footing.
+#+OPTIONS: ^:nil
+
+* Rationale
+EQLizr provides a plugin for Pathom Connect that automatically sets up resolvers
+for a PostgreSQL database with near-zero configuration
+** Why not Walkable?
+While walkable is a fantastic library, it does not support Pathom Connect
+completely, and requires complex configuration via the floor plan. However,
+Walkable is probably significantly more efficient than this library.
+
+* Features [5/8]
+Features are listed in order of priority.
+- [X] Primary key ident resolvers.
+- [X] Global resolvers for tables.
+- [X] Unique column ident resolvers.
+- [X] One to one joins.
+- [X] One to many joins.
+- [ ] Batch resolvers.
+- [ ] Support filter, pagination based on honeysql.
+- [ ] Support DBs other than PostgreSQL.
+
+* Example
+Lets say we have a few tables in a PostgreSQL database:
+
+| person.id | person.name |
+|-----------+-------------|
+|         1 | John Smith  |
+|         2 | John Doe
+
+| account.id | account.email  | account.person |
+|------------+----------------+----------------|
+|          1 | john@smith.com |              1 |
+|          2 | john@doe.com   |              2 |
+
+| pet.id | pet.name |
+|--------+----------|
+|      1 | Spot     |
+|      2 | Buddy    |
+|      3 | Fido     |
+
+
+| person_pet.id  | person_pet.person  | person_pet.pet  |
+|----------------+--------------------+-----------------|
+|              1 |                  1 |               1 |
+|              2 |                  1 |               3 |
+|              3 |                  2 |               2 |
+|              4 |                  2 |               3 |
+
+
+
+#+begin_src clojure
+    (ns eqlizr.example
+      (:require
+       [clojure.core.async :as a]
+       [com.wsscode.pathom.core :as p]
+       [com.wsscode.pathom.connect :as pc]
+       [eqlizr.core :as eqlizr]
+       [eqlizr.database :as database]
+       [next.jdbc :as jdbc]))
+
+    (def ds (jdbc/get-datasource {:dbtype "postgresql"
+                                  :dbname "test"
+                                  :user   "test"}))
+
+    (def parser
+      (p/parallel-parser
+       {::p/env     {::p/reader               [p/map-reader
+                                               pc/parallel-reader
+                                               pc/open-ident-reader
+                                               p/env-placeholder-reader]
+                     ::p/placeholder-prefixes #{">"}}
+        ::p/mutate  pc/mutate-async
+        ::p/plugins [;; Your own connect resolvers
+                     (pc/connect-plugin {::pc/register []})
+                     ;; Register EQLizr plugin here!
+                     (eqlizr/plugin {::jdbc/connectable ds
+                                     ::database/type    :ansi})
+                   
+                     p/error-handler-plugin
+                     p/trace-plugin]}))
+
+
+    (a/<!! (parser {} [ ;; Join on all people.
+                       {:person/all
+                        [:person/name
+                         ;; One to one join can be done in the same context!
+                         :account/email
+                         ;; Join with a bridge table.
+                         {:person/person_pet
+                          [:pet/name]}]}]))
+    ;; => #:person{:all
+    ;;             [{:person/name "John Smith",
+    ;;               :account/email "john@smith.com",
+    ;;               :person/person_pet [#:pet{:name "Spot"} #:pet{:name "Fido"}]}
+    ;;              {:person/name "John Doe",
+    ;;               :account/email "john@doe.com",
+    ;;               :person/person_pet [#:pet{:name "Buddy"} #:pet{:name "Fido"}]}]}
+#+end_src
+
+You can see the minuscule amount of configuration needed for EQLizr separated
+from the rest of the boilerplate here:
+
+#+begin_src clojure
+  ;; Register EQLizr plugin here!
+  (eqlizr/plugin {::jdbc/connectable ds
+                  ::database/type    :ansi})
+#+end_src
+
+The only configuration needed is a database connection and a database type! How
+did we do it?
+
+* How it works
+
+EQLizr queries the ANSI catalog of your database to find the tables and
+relationships. In doing so, we make a few assumptions about the structure of the
+database.
+
+- If :table_one/column is a foreign key with a unique constraint to
+  :table_two/column, the relationship is treated as one-to-one
+- If :table_one/column is a foreign key without a unique constraint to
+  :table_two/column, the relationship is treated as one-to-many
+- Many-to-many relationships are handled as two one-to-many lookups, which is
+  why in the example above we join on the bridge table, not the pet table.
