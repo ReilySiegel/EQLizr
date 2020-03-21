@@ -9,7 +9,7 @@ for a PostgreSQL database with near-zero configuration
 ** Why not Walkable?
 While walkable is a fantastic library, it does not support Pathom Connect
 completely, and requires complex configuration via the floor plan. However,
-Walkable is probably significantly more efficient than this library.
+Walkable is probably more efficient than this library.
 
 * Features [6/8]
 Features are listed in order of priority.
@@ -33,26 +33,26 @@ EQLizr can be installed using deps.edn.
 
 Lets say you have a few tables in a PostgreSQL database:
 
-| person.id | person.name |
-|-----------+-------------|
-|         1 | John Smith  |
-|         2 | John Doe
+| person.id (Primary Key) | person.name |
+|-------------------------+-------------|
+|                       1 | John Smith  |
+|                       2 | John Doe    |
 
 
-| account.id | account.email  | account.person |
-|------------+----------------+----------------|
-|          1 | john@smith.com |              1 |
-|          2 | john@doe.com   |              2 |
+| account.id (Primary Key) | account.email (Unique) | account.person (Unique, Foreign Key) |
+|--------------------------+------------------------+--------------------------------------|
+|                        1 | john@smith.com         |                                    1 |
+|                        2 | john@doe.com           |                                    2 |
 
 
-| pet.id | pet.name |
-|--------+----------|
-|      1 | Spot     |
-|      2 | Buddy    |
-|      3 | Fido     |
+| pet.id (Primary Key) | pet.name |
+|----------------------+----------|
+|                    1 | Spot     |
+|                    2 | Buddy    |
+|                    3 | Fido     |
 
 
-| person_pet.id  | person_pet.person  | person_pet.pet  |
+| person_pet.id (Primary Key) | person_pet.person (Foreign Key) | person_pet.pet (Foreign Key |
 |----------------+--------------------+-----------------|
 |              1 |                  1 |               1 |
 |              2 |                  1 |               3 |
@@ -68,6 +68,7 @@ Lets say you have a few tables in a PostgreSQL database:
      [eqlizr.core :as eqlizr]
      [eqlizr.database :as database]
      [next.jdbc :as jdbc]))
+
   ;; Set up a connectable object for jdbc.
   ;; This is the connection EQLizr will use to connect to your database.
   (def ds (jdbc/get-datasource {:dbtype "postgresql"
@@ -122,7 +123,6 @@ You can see the minuscule amount of configuration needed for EQLizr separated
 from the rest of the boilerplate here:
 
 #+begin_src clojure
-  ;; Register EQLizr plugin here!
   (eqlizr/plugin {::jdbc/connectable ds
                   ::database/type    :ansi})
 #+end_src
