@@ -108,15 +108,19 @@
   {::pc/sym    name
    ::pc/input  #{name}
    ::pc/output (database/columns-in-table columns (k/table name))
+   ::pc/batch? true
    ::pc/resolve
-   (fn [_ input]
-     (let [name-value (get input name)
-           q          (sql/format
-                       {:select [:*]
-                        :from   [(k/table name)]
-                        :where  [:= name name-value]}
-                       :quoting :ansi)]
-       (jdbc/execute-one! connectable q)))})
+   (pc/batch-resolver
+    (fn [_ inputs]
+      (let [name-values (map name inputs)
+            q           (sql/format
+                         {:select [:*]
+                          :from   [(k/table name)]
+                          :where  [:in name name-values]}
+                         :quoting :ansi)]
+        (pc/batch-restore-sort {::pc/inputs inputs
+                                ::pc/key    name}
+                               (jdbc/execute! connectable q)))))})
 
 (defn- generate-to-many-resolver
   "Given a `column` and `opts`, generate a global resolver that takes the column's

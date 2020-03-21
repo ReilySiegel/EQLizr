@@ -11,14 +11,14 @@ While walkable is a fantastic library, it does not support Pathom Connect
 completely, and requires complex configuration via the floor plan. However,
 Walkable is probably significantly more efficient than this library.
 
-* Features [5/8]
+* Features [6/8]
 Features are listed in order of priority.
 - [X] Primary key ident resolvers.
 - [X] Global resolvers for tables.
 - [X] Unique column ident resolvers.
 - [X] One to one joins.
 - [X] One to many joins.
-- [ ] Batch resolvers.
+- [X] Batch resolvers.
 - [ ] Support filter, pagination based on honeysql.
 - [ ] Support DBs other than PostgreSQL.
 
