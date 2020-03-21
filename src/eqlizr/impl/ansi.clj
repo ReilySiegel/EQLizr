@@ -7,7 +7,8 @@
             [honeysql.core :as sql]
             [eqlizr.resolvers :as resolvers]
             [com.wsscode.pathom.core]
-            [com.wsscode.pathom.connect :as pc]))
+            [com.wsscode.pathom.connect :as pc]
+            [eqlizr.impl.keyword :as k]))
 
 (def ^:private column-query-ansi
   "This query retrieves all the needed information from the database.
@@ -84,17 +85,17 @@
   [{:column/keys [name]}
    {::database/keys [columns]
     ::jdbc/keys     [connectable]}]
-  {::pc/sym    (symbol (namespace name) "global")
+  {::pc/sym    (symbol (k/keyword name "all"))
    ::pc/input  #{}
-   ::pc/output [{(keyword (namespace name) "all")
-                 (database/columns-in-table columns (namespace name))}]
+   ::pc/output [{(k/keyword name "all")
+                 (database/columns-in-table columns (k/table name))}]
    ::pc/resolve
    (fn [_ _]
      (let [q (sql/format
               {:select [:*]
-               :from   [(keyword (namespace name))]}
+               :from   [(k/table name)]}
               :quoting :ansi)]
-       {(keyword (namespace name) "all")
+       {(k/keyword name "all")
         (jdbc/execute! connectable q)}))})
 
 (defn- generate-unique-resolver
@@ -104,17 +105,15 @@
   [{:column/keys [name]}
    {::database/keys [columns]
     ::jdbc/keys     [connectable]}]
-  {::pc/sym    (symbol (namespace name) (str                          
-                                         (clojure.core/name name)
-                                         "-unique"))
+  {::pc/sym    name
    ::pc/input  #{name}
-   ::pc/output (database/columns-in-table columns (namespace name))
+   ::pc/output (database/columns-in-table columns (k/table name))
    ::pc/resolve
    (fn [_ input]
      (let [name-value (get input name)
            q          (sql/format
                        {:select [:*]
-                        :from   [(keyword (namespace name))]
+                        :from   [(k/table name)]
                         :where  [:= name name-value]}
                        :quoting :ansi)]
        (jdbc/execute-one! connectable q)))})
@@ -125,23 +124,23 @@
   [{:column/keys [name foreign-name]}
    {::database/keys [columns]
     ::jdbc/keys     [connectable]}]
-  {::pc/sym    (symbol (namespace name) (str (clojure.core/name name) "-to-many"))
+  {::pc/sym    (symbol name)
    ::pc/input  #{foreign-name}
-   ::pc/output [{(keyword (namespace foreign-name) (namespace name))
-                 (database/columns-in-table columns (namespace name))}]
+   ::pc/output [{(k/keyword foreign-name (k/table name))
+                 (database/columns-in-table columns (k/table name))}]
    ::pc/resolve
    (fn [_ input]
      (let [foreign-name-value (get input foreign-name)
            q                  (sql/format
                                {:select [:*]
-                                :from   [(keyword (namespace name))]
-                                :join   [(keyword (namespace foreign-name))
+                                :from   [(k/table name)]
+                                :join   [(k/table foreign-name)
                                          [:= name foreign-name]]
                                 :where  [:= foreign-name foreign-name-value]}
                                :quoting :ansi
                                :allow-namespaced-names? true
                                :namespace-as-table?     true)]
-       {(keyword (namespace foreign-name) (namespace name))
+       {(k/keyword foreign-name (k/table name))
         (jdbc/execute! connectable q)}))})
 
 (defmethod resolvers/generate :ansi [{::database/keys [columns]
