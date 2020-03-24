@@ -33,10 +33,10 @@ EQLizr can be installed using deps.edn.
 
 Lets say you have a few tables in a PostgreSQL database:
 
-| person.id (Primary Key) | person.name |
-|-------------------------+-------------|
-|                       1 | John Smith  |
-|                       2 | John Doe    |
+| person.id (Primary Key) | person.first_name | person.last_name |
+|-------------------------+-------------------+------------------|
+|                       1 | John              | Smith            |
+|                       2 | John              | Doe              |
 
 
 | account.id (Primary Key) | account.email (Unique) | account.person (Unique, Foreign Key) |
@@ -75,6 +75,13 @@ Lets say you have a few tables in a PostgreSQL database:
                                 :dbname "test"
                                 :user   "test"}))
 
+  ;; Add a derivative resolver that requires input from two database fields, and
+  ;; constructs a new output from them.
+  (pc/defresolver full-name [env {:person/keys [first_name last_name]}]
+    {::pc/input  #{:person/first_name :person/last_name}
+     ::pc/output [:person/name]}
+    {:person/name (str first_name " " last_name)})
+
   ;; Create a pathom parser. This is mostly boilerplate taken directly from the
   ;; Pathom documentation. The important part is in the `::p/plugins` section
   (def parser
@@ -91,7 +98,7 @@ Lets say you have a few tables in a PostgreSQL database:
                    ;; in the format of `:table/column` as input to your resolver
                    ;; to create derivative attributes such as `:person/full_name`
                    ;; from `:person/first_name` and `:person/last_name`.
-                   (pc/connect-plugin {::pc/register []})
+                   (pc/connect-plugin {::pc/register [full-name]})
                    ;; Register EQLizr plugin here! This is where the magic
                    ;; happens. A Pathom Connect plugin is created, registering
                    ;; resolvers for all of your database tables automatically.
@@ -104,7 +111,7 @@ Lets say you have a few tables in a PostgreSQL database:
   ;; Run a query against the parser.
   (a/<!! (parser {} [ ;; Join on all people.
                      {:person/all
-                      [;; Request a column from the table.
+                      [;; Request a derived attribute.
                        :person/name
                        ;; One to one join can be done in the same context!
                        :account/email
