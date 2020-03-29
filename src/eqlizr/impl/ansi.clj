@@ -10,63 +10,11 @@
             [com.wsscode.pathom.connect :as pc]
             [eqlizr.impl.keyword :as k]))
 
-(def ^:private column-query-ansi
-  "This query retrieves all the needed information from the database.
-  Here be dragons."
-  (sql/format 
-   {:select    [[#sql/call[:concat :c.table_name "/" :c.column_name]
-                 :column/name]
-                ;; Produces "/" for columns with no foreign key, must be removed
-                ;; in post.
-                [#sql/call[:concat :ccu.table_name "/" :ccu.column_name]
-                 :column/foreign-name]
-                [#sql/call
-                 [:or
-                  #sql/call[:= "PRIMARY KEY" :tcp.constraint_type]
-                  #sql/call[:= "UNIQUE" :tcu.constraint_type]]
-                 :column/unique?]
-                [#sql/call
-                 [:= "PRIMARY KEY" :tcp.constraint_type]
-                 :column/primary-key?]]
-    :from      [[:information_schema.columns :c]]
-    :left-join [;; Foreign key joins
-                [:information_schema.key_column_usage :kcu]
-                [:and
-                 [:= :kcu.table_name :c.table_name]
-                 [:= :kcu.column_name :c.column_name]]
-                [:information_schema.constraint_column_usage :ccu]
-                [:and
-                 [:= :ccu.constraint_name :kcu.constraint_name]
-                 [:not [:and
-                        [:= :ccu.table_name :kcu.table_name]
-                        [:= :ccu.column_name :kcu.column_name]]]]
-                ;; Joins for primary key
-                [:information_schema.key_column_usage :kcup]
-                [:and
-                 [:= :kcup.table_name :c.table_name]
-                 [:= :kcup.column_name :c.column_name]]
-                [:information_schema.table_constraints :tcp]
-                [:and
-                 [:= :tcp.constraint_type "PRIMARY KEY"]
-                 [:= :tcp.table_name :c.table_name]
-                 [:= :kcup.constraint_name :tcp.constraint_name]]
-                ;; Joins for unique
-                [:information_schema.key_column_usage :kcuu]
-                [:and
-                 [:= :kcuu.table_name :c.table_name]
-                 [:= :kcuu.column_name :c.column_name]]
-                [:information_schema.table_constraints :tcu]
-                [:and
-                 [:= :tcu.constraint_type "UNIQUE"]
-                 [:= :tcu.table_name :c.table_name]
-                 [:= :kcuu.constraint_name :tcu.constraint_name]]]
-    :where     [:= :c.table_schema "public"]}
-   :allow-namespaced-names? true
-   :quoting                 :ansi))
-
-
 (defmethod database/column-map :ansi [{::jdbc/keys [connectable]}]
-  (->> (jdbc/execute! connectable column-query-ansi
+  (->> (jdbc/execute! connectable
+                      (sql/format database/information-schema-query
+                                  :allow-namespaced-names? true
+                                  :quoting                 :ansi)
                       {:builder-fn result-set/as-unqualified-modified-maps
                        :label-fn   #(str/replace % #"_" "-")})
        ;; As columns with no foreign key have a :foreign-key value of "/"
@@ -79,12 +27,10 @@
        ;; Convert from a vector of columns to a map of names to columns.
        (reduce (fn [acc column] (assoc acc (:column/name column) column)) {})))
 
-(defn- generate-global-resolver
-  "Given a `column` and `opts`, generate a global resolver that does not require
-  input and returns all results in the same table as `column`."
-  [{:column/keys [name]}
-   {::database/keys [columns]
-    ::jdbc/keys     [connectable]}]
+(defmethod resolvers/generate-global-resolver :ansi
+  [{::database/keys [columns]
+    ::jdbc/keys     [connectable]}
+   {:column/keys [name]}]
   {::pc/sym    (symbol (k/keyword name "all"))
    ::pc/input  #{}
    ::pc/output [{(k/keyword name "all")
@@ -98,14 +44,11 @@
        {(k/keyword name "all")
         (jdbc/execute! connectable q)}))})
 
-(defn- generate-unique-resolver
-  "Given a `column` and `opts`, generate a resolver that takes a value for
-  `column` as input and returns one result. This is used both for primary keys
-  and keys with unique constraints."
-  [{:column/keys [name]}
-   {::database/keys [columns]
-    ::jdbc/keys     [connectable]}]
-  {::pc/sym    name
+(defmethod resolvers/generate-unique-resolver :ansi
+  [{::database/keys [columns]
+    ::jdbc/keys     [connectable]}
+   {:column/keys [name]}]
+  {::pc/sym    (symbol name)
    ::pc/input  #{name}
    ::pc/output (database/columns-in-table columns (k/table name))
    ::pc/batch? true
@@ -122,12 +65,10 @@
                                 ::pc/key    name}
                                (jdbc/execute! connectable q)))))})
 
-(defn- generate-to-many-resolver
-  "Given a `column` and `opts`, generate a global resolver that takes the column's
-  `:foreign-name` as input and returns all results with that `:foreign-name`."
-  [{:column/keys [name foreign-name]}
-   {::database/keys [columns]
-    ::jdbc/keys     [connectable]}]
+(defmethod resolvers/generate-to-many-resolver :ansi
+  [{::database/keys [columns]
+    ::jdbc/keys     [connectable]}
+   {:column/keys [name foreign-name]}]
   {::pc/sym    (symbol name)
    ::pc/input  #{foreign-name}
    ::pc/output [{(k/keyword foreign-name (k/table name))
@@ -146,26 +87,3 @@
                                :namespace-as-table?     true)]
        {(k/keyword foreign-name (k/table name))
         (jdbc/execute! connectable q)}))})
-
-(defmethod resolvers/generate :ansi [{::database/keys [columns]
-                                      :as             opts}]
-  (into [] (for [{:column/keys [name foreign-name unique? primary-key?]
-                  :as          column}
-                 (vals columns)]
-             (cond
-               primary-key?
-               [(generate-unique-resolver column opts)
-                (generate-global-resolver column opts)]
-               ;; One-to-one
-               (and unique?
-                    (not (nil? foreign-name)))
-               [(pc/alias-resolver2 name foreign-name)
-                (generate-unique-resolver column opts)]
-               ;; one-to-many
-               (not (nil? foreign-name))
-               [(pc/alias-resolver name foreign-name)
-                (generate-to-many-resolver column opts)]
-               ;; Unique
-               unique?
-               (generate-unique-resolver column opts)
-               :else []))))

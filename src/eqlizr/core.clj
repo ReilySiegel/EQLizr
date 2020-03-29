@@ -3,8 +3,8 @@
    [com.wsscode.pathom.core]
    [com.wsscode.pathom.connect :as pc]
    [eqlizr.impl.ansi]
-   [eqlizr.database :as database]
-   [eqlizr.resolvers :as resolvers]))
+   [eqlizr.resolvers :as resolvers]
+   [eqlizr.database :as database]))
 
 (defn plugin
   "Generate resolvers for a database.
