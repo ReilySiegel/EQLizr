@@ -19,10 +19,10 @@
 (defn columns-in-table
   "Given a column map (from `column-map`) find all columns in the table `table`."
   [column-map table]
-  (->> column-map
-       vals
-       (filter (fn [c] (= (name table) (namespace (:column/name c)))))
-       (mapv :column/name)))
+  (into []
+        (comp (filter (fn [c] (= (name table) (namespace (:column/name c)))))
+              (map :column/name))
+        (vals column-map)))
 
 (def information-schema-query
   "This query retrieves all the needed information about columns and their

@@ -11,21 +11,24 @@
             [eqlizr.impl.keyword :as k]))
 
 (defmethod database/column-map :ansi [{::jdbc/keys [connectable]}]
-  (->> (jdbc/execute! connectable
-                      (sql/format database/information-schema-query
-                                  :allow-namespaced-names? true
-                                  :quoting                 :ansi)
-                      {:builder-fn result-set/as-unqualified-modified-maps
-                       :label-fn   #(str/replace % #"_" "-")})
-       ;; As columns with no foreign key have a :foreign-key value of "/"
-       ;; because I don't understand SQL, fix that here.
-       (mapv (fn [c] (update c :column/foreign-name (fn [s]
-                                                     (when (not= s "/") s)))))
-       ;; Make the names of columns keywords.
-       (mapv (fn [c] (update c :column/foreign-name keyword)))
-       (mapv (fn [c] (update c :column/name keyword)))
-       ;; Convert from a vector of columns to a map of names to columns.
-       (reduce (fn [acc column] (assoc acc (:column/name column) column)) {})))
+  (into
+   {}
+   (comp
+    ;; As columns with no foreign key have a :foreign-key value of "/"
+    ;; because I don't understand SQL, fix that here.
+    (map (fn [c] (update c :column/foreign-name (fn [s]
+                                                 (when (not= s "/") s)))))
+    ;; Make the names of columns keywords.
+    (map (fn [c] (update c :column/foreign-name keyword)))
+    (map (fn [c] (update c :column/name keyword)))
+    ;; Convert from a vector of columns to a map of names to columns.
+    (map (juxt :column/name identity)))
+   (jdbc/execute! connectable
+                  (sql/format database/information-schema-query
+                              :allow-namespaced-names? true
+                              :quoting                 :ansi)
+                  {:builder-fn result-set/as-unqualified-modified-maps
+                   :label-fn   #(str/replace % #"_" "-")})))
 
 (defmethod resolvers/generate-global-resolver :ansi
   [{::database/keys [columns]
