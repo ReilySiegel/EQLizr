@@ -10,6 +10,59 @@
             [com.wsscode.pathom.connect :as pc]
             [eqlizr.impl.keyword :as k]))
 
+(def information-schema-query
+  "This query retrieves all the needed information about columns and their
+  relationships from the database using the information schema.
+  Here be dragons."
+  {:select    [[#sql/call[:concat :c.table_name "/" :c.column_name]
+                :column/name]
+               ;; Produces "/" for columns with no foreign key, must be removed
+               ;; in post.
+               [#sql/call[:concat :ccu.table_name "/" :ccu.column_name]
+                :column/foreign-name]
+               [#sql/call
+                [:or
+                 #sql/call[:= "PRIMARY KEY" :tcp.constraint_type]
+                 #sql/call[:= "UNIQUE" :tcu.constraint_type]]
+                :column/unique?]
+               [#sql/call
+                [:= "PRIMARY KEY" :tcp.constraint_type]
+                :column/primary-key?]]
+   :from      [[:information_schema.columns :c]]
+   :left-join [ ;; Foreign key joins
+               [:information_schema.key_column_usage :kcu]
+               [:and
+                [:= :kcu.table_name :c.table_name]
+                [:= :kcu.column_name :c.column_name]]
+               [:information_schema.constraint_column_usage :ccu]
+               [:and
+                [:= :ccu.constraint_name :kcu.constraint_name]
+                [:not [:and
+                       [:= :ccu.table_name :kcu.table_name]
+                       [:= :ccu.column_name :kcu.column_name]]]]
+               ;; Joins for primary key
+               [:information_schema.key_column_usage :kcup]
+               [:and
+                [:= :kcup.table_name :c.table_name]
+                [:= :kcup.column_name :c.column_name]]
+               [:information_schema.table_constraints :tcp]
+               [:and
+                [:= :tcp.constraint_type "PRIMARY KEY"]
+                [:= :tcp.table_name :c.table_name]
+                [:= :kcup.constraint_name :tcp.constraint_name]]
+               ;; Joins for unique
+               [:information_schema.key_column_usage :kcuu]
+               [:and
+                [:= :kcuu.table_name :c.table_name]
+                [:= :kcuu.column_name :c.column_name]]
+               [:information_schema.table_constraints :tcu]
+               [:and
+                [:= :tcu.constraint_type "UNIQUE"]
+                [:= :tcu.table_name :c.table_name]
+                [:= :kcuu.constraint_name :tcu.constraint_name]]]
+   :where     [:= :c.table_schema "public"]})
+
+
 (defmethod database/column-map :ansi [{::jdbc/keys [connectable]}]
   (into
    {}
@@ -24,7 +77,7 @@
     ;; Convert from a vector of columns to a map of names to columns.
     (map (juxt :column/name identity)))
    (jdbc/execute! connectable
-                  (sql/format database/information-schema-query
+                  (sql/format information-schema-query
                               :allow-namespaced-names? true
                               :quoting                 :ansi)
                   {:builder-fn result-set/as-unqualified-modified-maps

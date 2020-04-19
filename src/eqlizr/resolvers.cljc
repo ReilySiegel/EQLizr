@@ -1,8 +1,7 @@
 (ns eqlizr.resolvers
   (:require [com.wsscode.pathom.core]
             [com.wsscode.pathom.connect :as pc]
-            [eqlizr.database :as database]
-            [honeysql.core]))
+            [eqlizr.database :as database]))
 
 (defmulti generate-unique-resolver
   "Given a `db` and `column`, generate a resolver that takes a value for

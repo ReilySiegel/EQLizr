@@ -1,5 +1,8 @@
 {:deps  {seancorfield/next.jdbc    {:mvn/version "1.0.409"}
          com.wsscode/pathom        {:mvn/version "2.3.0-alpha5"}
          honeysql                  {:mvn/version "0.9.10"}
-         org.postgresql/postgresql {:mvn/version "42.2.11.jre7"}}
+         org.postgresql/postgresql {:mvn/version "42.2.11.jre7"}
+         reilysiegel/clojure-sheets
+         {:git/url "https://github.com/ReilySiegel/clojure-sheets"
+          :sha     "15c6cc72688ef4abb058d3914e4441e63dfac510"}}
  :paths ["src"]}
