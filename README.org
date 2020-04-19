@@ -28,7 +28,7 @@ EQLizr can be installed using deps.edn.
 
 #+begin_src clojure
   {:deps {reilysiegel/eqlizr {:git/url "https://github.com/ReilySiegel/EQLizr"
-                              :git/sha "8e8a048bcdb0c906f33b71f0f1d20c799830b28f"}}}
+                              :sha "8e933385b6bda78e147d427c04fb528fd803a3ea"}}}
 #+end_src
 ** PostgreSQL
 Lets say you have a few tables in a PostgreSQL database:
