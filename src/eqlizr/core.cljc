@@ -7,7 +7,7 @@
    [eqlizr.resolvers :as resolvers]
    [eqlizr.database :as database]))
 
-(defn plugin
+(defn resolvers
   "Generate resolvers for a database.
   `opts` MUST be a map that contains:
   
@@ -17,4 +17,9 @@
   type."
   [opts]
   (let [column-map (database/column-map opts)]
-    {::pc/register (resolvers/generate (assoc opts ::database/columns column-map))}))
+    (resolvers/generate (assoc opts ::database/columns column-map))))
+
+(defn plugin
+  "Returns the resolvers as a Pathom plugin, see `resolvers`."
+  [opts]
+  {::pc/register (resolvers opts)})
